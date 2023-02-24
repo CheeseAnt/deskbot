@@ -1,0 +1,1 @@
+start /b pythonw server.py 1>NUL 2>NUL

@@ -1,0 +1,268 @@
+<html>
+    <head>
+    <meta content='width=device-width; initial-scale=0.4; maximum-scale=0.4; user-scalable=0;' name='viewport' />
+        <!-- Font Awesome -->
+    <link
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    rel="stylesheet"
+    />
+    <!-- Google Fonts -->
+    <link
+    href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
+    rel="stylesheet"
+    />
+    <!-- MDB -->
+    <link
+    href="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/6.1.0/mdb.min.css"
+    rel="stylesheet"
+    />
+    <!-- MDB -->
+    <script
+    type="text/javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/6.1.0/mdb.min.js"
+    ></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.3/jquery.min.js"></script>
+    <style>
+        body {
+            width: 100%;
+            height: 100%;
+        }
+        .input-group {
+            margin: auto;
+            margin-top: 20%;
+            width: 64%;
+        }
+        .input-group>input,.input-group>button {
+            font-size: 1rem;
+        }
+        .timer-container {
+            border: 2px dotted grey;
+            border-radius: 5px;
+            margin: auto;
+            width: 64%;
+            padding: 10px;
+            font-size: 2rem;
+            font-weight: bold;
+            text-align: center;
+        }
+        #outercontainer {
+            margin-top: 10%;
+        }
+        #container {
+            width: 100%;
+            height: 40%;
+            background-color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-radius: 7px;
+            touch-action: none;
+        }
+        #item {
+            width: 400px;
+            height: 400px;
+            background-color: green;
+            border: 10px solid rgba(255, 107, 107, 0.5);
+            border-radius: 50%;
+            touch-action: none;
+            user-select: none;
+        }
+        #item:active {
+            background-color: rgb(212, 254, 255);
+        }
+        #item:hover {
+            cursor: pointer;
+            border-width: 20px;
+        }
+        .bigbtn {
+            margin: 20px;
+            padding-left: 6%;
+            padding-right: 6%;
+            padding-top: 2.5%;
+            padding-bottom: 2.5%;
+            font-size: 4rem;
+        }
+        .mousecont {
+            text-align-last: justify;
+        }
+    </style>
+    </head>
+<body>
+    <div class="input-group mb-3">
+        <input
+        type="number"
+        class="form-control"
+        placeholder="Time"
+        value="{{time_default}}"
+        aria-describedby="button-addon2"
+        />
+        <button onclick="submit(this.parentElement);" class="btn btn-outline-primary" type="button" id="button-addon2" data-mdb-ripple-color="dark">
+        Shutdown
+        </button>
+        <button onclick="cancel();" class="btn btn-outline-danger" type="button" id="button-addon2" data-mdb-ripple-color="dark">
+            Cancel
+        </button>
+    </div>
+    <div class="timer-container">Current Timeout: <span class="timer-output"></span></div>
+    <div id="outerContainer">
+        <div id="container">
+          <div id="item">
+    
+          </div>
+        </div>
+    </div>
+    <div class="mousecont">
+        <button class="bigbtn btn btn-primary" onclick="clickmouse()">Left</button>
+        <button id="middle" class="bigbtn btn btn-outline-info" onclick="middleclick()">Mid</button>
+        <button class="bigbtn btn btn-success" onclick="rightmouse()">Right</button>
+    </div>
+    <div class="mousecont" style="text-align-last:center">
+        <button id="volmouse" class="bigbtn btn btn-outline-warning" onclick="volmouse()">Volume</button>
+    </div>
+    </body>
+    <script type="text/javascript">
+        function submit(el) {
+            let timer = el.children[0].value;
+            timer = timer * 60;
+
+            $.post("/shutdown?timer="+timer)
+            checkTimer();
+        }
+        function cancel() {
+            $.get("/cancel");
+            checkTimer();
+        }
+        function checkTimer() {
+            let output = document.querySelector('.timer-output');
+
+            $.get("/timer", (data) => {
+                let timer = data["timer"];
+                if(timer<0) {
+                    timer = "";
+                    output.innerHTML = "";
+                }
+                else {
+                    let seconds = parseInt(timer%60);
+                    let minutes = parseInt(timer/60);
+                    output.innerHTML = minutes + " minutes " + seconds + " seconds";
+                }
+            })
+        }
+        var dragItem = document.querySelector("#item");
+        var middlei = document.querySelector("#middle");
+        var volbut = document.querySelector("#volmouse");
+        var container = document.querySelector("#container");
+
+        var active = false;
+        var currentX;
+        var currentY;
+        var initialX;
+        var initialY;
+        var xOffset = 0;
+        var yOffset = 0;
+        var funcid = 0;
+        var middle = false;
+        var volume = false;
+
+        container.addEventListener("touchstart", dragStart, false);
+        container.addEventListener("touchend", dragEnd, false);
+        container.addEventListener("touchmove", drag, false);
+
+        container.addEventListener("mousedown", dragStart, false);
+        container.addEventListener("mouseup", dragEnd, false);
+        container.addEventListener("mousemove", drag, false);
+
+        function clickmouse() {
+            if(middle) {
+                $.post("/middle");
+            }
+            else {
+                $.post("/click");
+            }
+        }
+        
+        function rightmouse() {
+            $.post("/rightclick");
+        }
+
+        function movemouse() {
+            if(middle) {
+                $.post("/scroll?Y="+(-yOffset/100))
+            }
+            else if(volume) {
+                $.post("/volume?V="+(-yOffset/100))
+            }
+            else {
+                $.post("/move?X="+xOffset/10+"&Y="+yOffset/10)
+            }
+        }
+        function middleclick() {
+            middle = !middle;
+
+            if(middle)
+                middlei.style.backgroundColor = 'orange';
+            else
+                middlei.style.backgroundColor = 'white';
+        }
+        function volmouse() {
+            volume = !volume;
+
+            if(volume)
+                volbut.style.backgroundColor = 'orange';
+            else
+                volbut.style.backgroundColor = 'white';
+        }
+
+        function dragStart(e) {
+            if (e.type === "touchstart") {
+                initialX = e.touches[0].clientX;
+                initialY = e.touches[0].clientY;
+            } else {
+                initialX = e.clientX;
+                initialY = e.clientY;
+            }
+
+            if (e.target === dragItem) {
+                active = true;
+                funcid = setInterval(movemouse, 16);
+            }
+        }
+        
+        function dragEnd(e) {
+            initialX = currentX;
+            initialY = currentY;
+            setTranslate(0, 0, dragItem);
+
+            active = false;
+            clearInterval(funcid);
+        }
+
+        function drag(e) {
+            if (active) {
+            
+                e.preventDefault();
+            
+                if (e.type === "touchmove") {
+                currentX = e.touches[0].clientX - initialX;
+                currentY = e.touches[0].clientY - initialY;
+                
+                } else {
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+                }
+
+                xOffset = currentX;
+                yOffset = currentY;
+
+                setTranslate(currentX, currentY, dragItem);
+            }
+        }
+
+        function setTranslate(xPos, yPos, el) {
+            el.style.transform = "translate3d(" + xPos + "px, " + yPos + "px, 0)";
+        }
+        setInterval(checkTimer, 1000);
+        checkTimer();
+    </script>
+</html>
