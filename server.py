@@ -1,11 +1,14 @@
+import functools
 from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse, RedirectResponse
 from starlette.templating import Jinja2Templates
+from starlette.schemas import SchemaGenerator
 from datetime import datetime
 from shutdowntimer import ShutdownTimer
+from lowerpower import start_low_power_service
 import uvicorn
 import pynput
 
@@ -14,6 +17,15 @@ from middleware import middleware
 import asyncio
 import random
 import time
+
+schemas = SchemaGenerator({"openapi": "3.0.0", "info": {"title": "Deskbot", "version": "1.0"}, "components":
+  {"securitySchemes":
+    {"basicAuth":
+      {"type": "http",
+      "scheme": "basic"}
+    }
+  }
+})
 
 current_dir = Path(__file__).parent
 templates = Jinja2Templates(directory=str(current_dir))#  / "templates"))
@@ -25,7 +37,7 @@ app = Starlette(
 )
 
 
-@app.route("/")
+@app.route("/", include_in_schema=False)
 async def homepage(request):
     context = {
         "time_default": 30,
@@ -37,9 +49,23 @@ async def homepage(request):
         context=context,
     )
 
+@app.route("/schema", include_in_schema=False, name="openapi_spec")
+def openapi_schema(request):
+    print(app.routes)
+    return JSONResponse(content=schemas.get_schema(app.routes))
+
+@app.route("/docs", include_in_schema=False)
+async def swagger_docs(request):
+    return templates.TemplateResponse(
+        name="swagger.html",
+        context={"request": request}
+    )
+
+
 timer = ShutdownTimer()
 
 def authenticate(func):
+    @functools.wraps(func)
     async def auth_func(request, *args, **kwargs):
         if not request.user.is_authenticated:
             return Response(status_code=401, headers={"WWW-Authenticate": "Basic"})
@@ -51,6 +77,17 @@ def authenticate(func):
 @app.route("/shutdown", methods=["POST"])
 @authenticate
 async def handle_shutdown_request(request: Request):
+    """
+    parameters:
+    - name: timer
+      in: query
+      required: true
+    responses:
+      200:
+        description: Start the shutdown timer
+    security:
+    - basicAuth: []
+    """
     time_sch = int(request.query_params.get("timer", -1))
     
     if time_sch >= 0:
@@ -135,4 +172,6 @@ async def cancel_shutdown(request: Request):
     return Response(status_code=200)
 
 if __name__ == "__main__":
+    low_power = start_low_power_service()
     uvicorn.run(app, host="0.0.0.0", port=1337)
+    low_power.join()
