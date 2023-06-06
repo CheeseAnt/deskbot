@@ -10,6 +10,8 @@ DETACHED_PROCESS = 0x00000008
 
 
 class PowerTimer():
+    NOMINAL_PLAN_LOC = "nominal_power_plan.pln"
+
     def __init__(self):
         self.timer = 0
         self.task = None
@@ -37,8 +39,22 @@ class PowerTimer():
 
         subprocess.call(f'POWERCFG /SETACTIVE {plan}', creationflags=DETACHED_PROCESS)
     
+    def get_nominal_plan(self):
+        with open(PowerTimer.NOMINAL_PLAN_LOC, 'r') as f:
+            return f.read()
+    
+    def set_nominal_plan(self, plan: str):
+        with open(self.NOMINAL_PLAN_LOC, 'w') as f:
+            f.write(plan)
+
     def get_current_plan(self):
         self.old_power_hash = winreg.QueryValueEx(self.power_key, 'ActivePowerScheme')[0]
+
+        if self.old_power_hash != self.low_power_hash:
+            self.set_nominal_plan(self.old_power_hash)
+        else:
+            self.old_power_hash = self.get_nominal_plan()
+
         print(f"saving {self.old_power_hash}")
     
     async def schedule_low_power(self, time=INACTIVITY_TIME):
@@ -90,9 +106,13 @@ def power_service(user_event: threading.Event):
     
     asyncio.run(asyncmain())
 
-def start_low_power_service() -> threading.Thread():
+def reset_power():
+    PowerTimer.change_power_plan(None, plan=PowerTimer.get_nominal_plan(None))
+
+def start_low_power_service() -> threading.Thread:
     def outer_thread():
         user_event = threading.Event()
+        reset_power()
 
         mouse = threading.Thread(target=activity_detector, args=(pynput.mouse.Events, user_event), daemon=True)
         keyboard = threading.Thread(target=activity_detector, args=(pynput.keyboard.Events, user_event), daemon=True)
